@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>بديش — full screen loop</title>
+  <style>
+    :root { --bg:#0b0f14; --fg:purple; --speed: 40; }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    #viewport {
+      height: 100vh;
+      overflow: hidden; /* always covers the whole screen */
+    }
+    #track {
+      will-change: transform;
+    }
+    .block { display: block; }
+    .line {
+      font-size: clamp(18px, 2.5vw, 32px); /* كبرتها بنسبة 1/7 */
+      line-height: 1.4;
+      white-space: nowrap;          /* sentence repeats horizontally */
+      letter-spacing: 0.5px;
+      color: var(--fg);
+    }
+  </style>
+</head>
+<body>
+  <div id="viewport" aria-label="Infinite repeating text that covers the screen">
+    <div id="track"></div>
+  </div>
+
+  <script>
+    (function () {
+      const SENTENCE = "بديش";
+      const HORIZONTAL_REPEAT_COUNT = 200; // fills width across any screen
+      const SPEED_PX_PER_SEC = 40;         // vertical scroll speed
+
+      const viewport = document.getElementById("viewport");
+      const track = document.getElementById("track");
+
+      let animationId = null;
+      let lastTimestamp = null;
+      let offsetY = 0;
+      let firstBlock = null;
+
+      function createWideLineText() {
+        // Repeat with trailing space so it visually tiles across the row
+        return (SENTENCE + " ").repeat(HORIZONTAL_REPEAT_COUNT);
+      }
+
+      function measureLineHeight() {
+        const probe = document.createElement("div");
+        probe.className = "line";
+        probe.textContent = createWideLineText();
+        probe.style.visibility = "hidden";
+        probe.style.position = "absolute";
+        viewport.appendChild(probe);
+        const h = probe.offsetHeight || 24;
+        viewport.removeChild(probe);
+        return h;
+      }
+
+      function buildBlock(linesCount) {
+        const block = document.createElement("div");
+        block.className = "block";
+        const fragment = document.createDocumentFragment();
+        const wide = createWideLineText();
+        for (let i = 0; i < linesCount; i++) {
+          const line = document.createElement("div");
+          line.className = "line";
+          line.textContent = wide;
+          fragment.appendChild(line);
+        }
+        block.appendChild(fragment);
+        return block;
+      }
+
+      function init() {
+        cancelAnimationFrame(animationId);
+        lastTimestamp = null;
+        offsetY = 0;
+        track.style.transform = "translateY(0)";
+        track.innerHTML = "";
+
+        // Compute how many lines are needed to fully cover the viewport
+        const lineHeight = measureLineHeight();
+        const linesNeeded = Math.ceil(viewport.clientHeight / lineHeight) + 2;
+
+        // Create one block that fills the viewport, then clone it for seamless loop
+        firstBlock = buildBlock(linesNeeded);
+        const secondBlock = firstBlock.cloneNode(true);
+
+        track.appendChild(firstBlock);
+        track.appendChild(secondBlock);
+
+        start();
+      }
+
+      function start() {
+        function step(timestamp) {
+          if (lastTimestamp == null) lastTimestamp = timestamp;
+          const deltaMs = timestamp - lastTimestamp;
+          lastTimestamp = timestamp;
+
+          offsetY += (SPEED_PX_PER_SEC * deltaMs) / 1000;
+          const blockHeight = firstBlock.offsetHeight;
+
+          if (offsetY >= blockHeight) {
+            // Seamless loop: jump back by exactly one block height
+            offsetY -= blockHeight;
+          }
+
+          track.style.transform = `translateY(${-offsetY}px)`;
+          animationId = requestAnimationFrame(step);
+        }
+        animationId = requestAnimationFrame(step);
+      }
+
+      // Initialize and handle resizes
+      init();
+      window.addEventListener("resize", () => {
+        // Debounced re-init to keep screen fully covered on size changes
+        clearTimeout(window.__coverResizeTimer);
+        window.__coverResizeTimer = setTimeout(init, 150);
+      });
+    })();
+  </script>
+</body>
+</html>
